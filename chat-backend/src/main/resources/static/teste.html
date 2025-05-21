@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat FURIA - Teste Autenticado</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+</head>
+<body>
+<h2>Chat FURIA - Teste Autenticado</h2>
+
+<!-- Formulário de Login -->
+<div id="login">
+    <h3>Login</h3>
+    <input type="text" id="nomeUsuario" placeholder="Nome de Usuário" />
+    <input type="password" id="senha" placeholder="Senha" />
+    <button onclick="realizarLogin()">Entrar</button>
+</div>
+
+<!-- Chat -->
+<div id="chat" style="display:none;">
+    <h3>Chat FURIA</h3>
+    <input id="mensagem" placeholder="Digite a mensagem" />
+    <button onclick="enviar()">Enviar</button>
+    <ul id="mensagens"></ul>
+</div>
+
+<script>
+    let stompClient;
+
+    // Função para realizar o login
+    function realizarLogin() {
+        const nomeUsuario = document.getElementById("nomeUsuario").value;
+        const senha = document.getElementById("senha").value;
+
+        fetch("http://localhost:8080/api/auth/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                nomeUsuario: nomeUsuario,
+                senha: senha
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.token) {
+                // Armazenar o token no localStorage
+                localStorage.setItem("token", data.token);
+                // Ocultar o formulário de login e exibir o chat
+                document.getElementById("login").style.display = "none";
+                document.getElementById("chat").style.display = "block";
+                // Conectar ao WebSocket
+                conectar();
+            } else {
+                alert("Login falhou!");
+            }
+        })
+        .catch(error => {
+            console.error("Erro no login:", error);
+            alert("Erro no login!");
+        });
+    }
+
+    // Função para conectar ao WebSocket
+    function conectar() {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+            alert("Você precisa estar logado.");
+            return;
+        }
+
+        const socket = new SockJS("http://localhost:8080/chat-furia");
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect({Authorization: `Bearer ${token}`}, (frame) => {
+            console.log("Conectado!", frame);
+
+            stompClient.subscribe("/topico/publico", (mensagem) => {
+                const dados = JSON.parse(mensagem.body);
+                document.getElementById("mensagens").innerHTML += `<li><b>${dados.remetente}:</b> ${dados.conteudo}</li>`;
+            });
+        }, (erro) => {
+            console.error("Erro ao conectar:", erro);
+        });
+    }
+
+    // Função para enviar mensagem
+    function enviar() {
+        const conteudo = document.getElementById("mensagem").value;
+        stompClient.send("/app/enviar", {}, JSON.stringify({
+            conteudo: conteudo
+        }));
+    }
+</script>
+</body>
+</html>
